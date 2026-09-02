@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from ukpn import analyse, extract, transform, validate
 
