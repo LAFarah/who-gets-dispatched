@@ -9,14 +9,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from ukpn import analyse, extract, transform, validate
+from ukpn import analyse, validate
 
 st.set_page_config(page_title="Who gets dispatched?", layout="wide")
 
 
 @st.cache_data(show_spinner="Loading dispatches...")
 def load() -> pd.DataFrame:
-    return transform.tidy(extract.load_raw())
+    # Read the pipeline output rather than the raw CSV. The raw extract is 12.7MB
+    # and gitignored, so it isn't present in a deployed environment — and the
+    # transform has already been applied and tested by the time this file exists.
+    return pd.read_parquet("data/processed/tidy.parquet")
 
 
 @st.cache_data(show_spinner="Running checks...")
