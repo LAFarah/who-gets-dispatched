@@ -12,18 +12,6 @@ Plus a validation layer that independently reproduces UKPN's own published
 quality-control criteria, to understand the dataset properly before drawing
 conclusions from it.
 
----
-
-## Findings
-
-> **Replace this section with your actual results once the pipeline has run.**
-> Lead with the answer, not the method. Three or four sentences, then the charts.
-> If the answer is "no clear trend", say that — a negative result honestly reported
-> is more credible than a trend forced out of noise.
-
-![Distributed share of requested volume](figures/distributed_share.png)
-
-![Volume-weighted price by product](figures/price_by_product.png)
 
 ## Data quality
 
@@ -37,9 +25,7 @@ row is a question, not a proven error.**
 
 ![Rows flagged by check](figures/exceptions_by_check.png)
 
-> Replace with the real count. State it plainly: *N of M dispatches (X%) were flagged
-> by at least one check.* If that number is zero, say so — a clean result validates
-> both their process and your implementation.
+
 
 ## An important caveat
 
