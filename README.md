@@ -11,6 +11,13 @@ I wanted to use that to answer two questions:
 Before trusting any numbers I also rebuilt UKPN's own quality checks against the
 public data, mainly to make sure I understood what each field meant.
 
+![Share of requested MWh by technology group](figures/distributed_share.png)
+
+Household DSR (almost all EV chargers) was under 6% of requested volume until early
+2025. It jumped to 43% in Q2 2025 and was 74% in the latest quarter (to August 2026),
+mostly taking share from generation and C&I demand. Grid-scale batteries stayed small
+throughout.
+
 
 ## Data quality
 
