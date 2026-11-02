@@ -74,8 +74,9 @@ def share_chart(share: pd.DataFrame, out: Path | None = None) -> Path:
     fig, ax = plt.subplots(figsize=(9, 4.6))
 
     palette = {
-        "domestic_dsr": DIST, "grid_scale": GRID, "behind_meter_storage": "#7a5c99",
-        "ci_demand": "#b08900", "other": CLEAN, "unclassified": "#cccccc",
+        "domestic_dsr": DIST, "grid_scale_storage": GRID, "behind_meter_storage": "#7a5c99",
+        "ci_demand": "#b08900", "generation": "#8c564b", "other": CLEAN,
+        "unclassified": "#cccccc",
     }
     for col, colour in palette.items():
         if col in pivot.columns:
@@ -100,8 +101,10 @@ def price_chart(prices: pd.DataFrame, out: Path | None = None) -> Path:
     out = out or FIG_DIR / "price_by_product.png"
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    d = prices[prices.tech_group.isin(["domestic_dsr", "grid_scale"])]
-    pivot = d.pivot(index="product", columns="tech_group", values="vw_price_gbp_per_mwh").fillna(0)
+    # Grid-scale here means grid_scale_storage (batteries). No fillna, so a product
+    # with no dispatches for a group gets no bar instead of a £0 bar.
+    d = prices[prices.tech_group.isin(["domestic_dsr", "grid_scale_storage"])]
+    pivot = d.pivot(index="product", columns="tech_group", values="vw_price_gbp_per_mwh")
 
     fig, ax = plt.subplots(figsize=(9, 0.7 * len(pivot) + 2.2))
     y = range(len(pivot))
@@ -109,9 +112,9 @@ def price_chart(prices: pd.DataFrame, out: Path | None = None) -> Path:
     if "domestic_dsr" in pivot:
         ax.barh([i + height / 2 for i in y], pivot["domestic_dsr"], height=height,
                 color=DIST, label="domestic DSR")
-    if "grid_scale" in pivot:
-        ax.barh([i - height / 2 for i in y], pivot["grid_scale"], height=height,
-                color=GRID, label="grid-scale")
+    if "grid_scale_storage" in pivot:
+        ax.barh([i - height / 2 for i in y], pivot["grid_scale_storage"], height=height,
+                color=GRID, label="grid-scale batteries")
 
     ax.set_yticks(list(y))
     ax.set_yticklabels(pivot.index, fontsize=9)

@@ -4,9 +4,9 @@ UK Power Networks publish every flexibility dispatch they've issued since April 
 I wanted to use that to answer two questions:
 
 1. Are household assets (EV chargers and heat pumps) winning a bigger share of
-   dispatched volume over time, compared with grid-scale batteries and generators?
-2. What do they get paid per MWh compared with grid-scale, and does that change by
-   product or zone?
+   dispatched volume over time, compared with grid-scale batteries?
+2. What do they get paid per MWh compared with grid-scale batteries, and does that
+   change by product or zone?
 
 Before trusting any numbers I also rebuilt UKPN's own quality checks against the
 public data, mainly to make sure I understood what each field meant.
