@@ -1,95 +1,118 @@
-# Is distributed flexibility winning share in UKPN dispatches?
+# Who gets dispatched?
 
-A short analysis of UK Power Networks' published flexibility dispatch data
-(1 April 2023 onwards), asking two questions:
+UK Power Networks publish every flexibility dispatch they've issued since April 2023.
+I wanted to use that to answer two questions:
 
-1. Is distributed flexibility — EV charge points, residential demand, heat pumps —
-   taking share from grid-scale assets in DSO flexibility dispatches?
-2. What is it paid per MWh relative to grid-scale, and does that differ by product
-   and by zone?
+1. Are household assets (EV chargers and heat pumps) winning a bigger share of
+   dispatched volume over time, compared with grid-scale batteries and generators?
+2. What do they get paid per MWh compared with grid-scale, and does that change by
+   product or zone?
 
-Plus a validation layer that independently reproduces UKPN's own published
-quality-control criteria, to understand the dataset properly before drawing
-conclusions from it.
+Before trusting any numbers I also rebuilt UKPN's own quality checks against the
+public data, mainly to make sure I understood what each field meant.
 
 
 ## Data quality
 
-UKPN publish the checks their own QC algorithm applies: dispatch times consistent
-with the contracted service window, correct flexibility zone, no duplicates, correct
-contracted price and volume, and a matching active contract.
+UKPN say every dispatch passes a QC algorithm that checks it is:
 
-Three of those five need contract data that isn't in the public feed, so this repo
-implements the internally-verifiable analogues alongside structural checks. **A flagged
-row is a question, not a proven error.**
+- timed within the contracted service window
+- assigned to the correct flexibility zone
+- not a duplicate
+- issued at the contracted price and volume
+- matched to an active contract
+
+Three of those need contract data that isn't in the public feed. So `validate.py` runs
+the parts I can check from the public data, plus some basic consistency checks
+(MWh should equal MW × hours, UTC and local times should agree, and so on).
+
+Some of these checks over-flag at the moment. Duplicates and overlapping windows
+account for most of the flags, which makes me think my definition of a unique dispatch
+is wrong rather than the data. I'm treating flagged rows as things to look into.
 
 ![Rows flagged by check](figures/exceptions_by_check.png)
 
 
+## Requested vs delivered
 
-## An important caveat
+Everything in this dataset is *requested* volume. UKPN note that delivered volume
+depends on performance against a baseline, and they publish outturn separately in the
+annual Flexibility Report (data appendices on Tender Hub). So every MWh and £ figure
+here is what was instructed. What was actually delivered and paid could be quite
+different, and matching the two up is the obvious next step.
 
-This dataset reports **requested** volumes. UKPN state that requested volumes may not
-match delivered volumes, depending on performance against the relevant baseline, and
-that outturn is published separately in the annual Flexibility Report and data
-appendices at Tender Hub.
 
-Every MWh and £ figure here is therefore instructed, not settled. That gap — between
-what was asked for and what was measured against a baseline and paid — is the
-interesting problem, and reconciling the two sources is the obvious next step.
-
-## Method
+## How it works
 
 ```
-extract   pull the full history via the Opendatasoft /exports endpoint
-transform resolve columns, parse timestamps, derive settlement periods, group technology
-validate  reproduce UKPN's published QC criteria; produce an exceptions table
-analyse   share over time, volume-weighted price, zone concentration, dispatch route
-figures   publication charts
+extract    full history via the Opendatasoft /exports endpoint
+transform  rename columns, parse timestamps, add settlement periods, group technologies
+validate   UKPN's QC criteria where possible, plus consistency checks
+analyse    share over time, volume-weighted price, zones, providers, turn-up vs turn-down
+figures    the charts in this README
 ```
 
-Two decisions worth flagging:
+A few details:
 
-**Settlement periods are computed from local midnight**, not from a fixed 48-per-day
-assumption. That makes 31 March come out at 46 periods and 27 October at 50, which is
-the case most half-hourly pipelines quietly get wrong. There are tests for both.
+- **Settlement periods** are counted from local midnight, so clock-change days get 46
+  or 50 periods instead of 48. There are tests for both.
+- **Prices are volume-weighted.** EV charger dispatches are frequent and tiny, so a
+  plain average mostly reflects them and understates what bigger units are paid.
+- **Technology groups** are mapped by hand in `TECHNOLOGY_GROUPS`. UKPN use two
+  different naming conventions in the same field (e.g. `Battery` and `Stored Energy
+  (...)`). Anything not in the mapping comes out as `unclassified` so it's visible.
+- **There's no dispatch ID** in the data, so a dispatch is identified by company, unit,
+  start time and product.
 
-**Prices are volume-weighted, not averaged.** A simple mean is dominated by
-high-frequency small dispatches and understates what large units are actually paid.
+
+## Open questions
+
+Things I noticed in an early 2,000-row sample, and what the full extract (48,834
+dispatches, April 2023 to August 2026) says:
+
+- **`dispatch_method`** was `epex` in every sampled row. The full history also has
+  `email` and `api`, and a handful of rows with free text like `thetford outage nv
+  17946` in that field.
+- **Turn-up dispatches** (`demand_turn_up`, `generation_turn_down`) show up from 2023,
+  not just recently. I need to work out how they relate to UKPN's newer bi-directional
+  products.
+- **`fu_id` equal to the zone name.** Most unit IDs look like `OCTO-WILL-LTU-F8CF`, but
+  1,650 rows use the zone name instead (e.g. `Cobham`). Naming convention or
+  placeholder?
+- **Older products.** `Dynamic` runs until March 2025 and `Secure` until December 2024,
+  before the newer products take over.
+- **Availability payments for household assets.** About a fifth of domestic DSR
+  dispatches carry an availability price. I want to see which providers and products
+  those are.
+
 
 ## Running it
 
 ```bash
-uv venv && source .venv/bin/activate
-uv pip install -e ".[dev]"
+pip install -r requirements.txt
 
-# 1. Look at the real schema before trusting any column mapping
-python scripts/discover_schema.py
-
-# 2. Full run
-python -m ukpn.pipeline
-
-# 3. Tests
+python scripts/discover_schema.py   # live field list and sample values
+python -m ukpn.pipeline             # pull, tidy, validate, analyse, charts
 pytest
-
-# 4. Explore
 streamlit run app.py
 ```
 
-Or:
+`python scripts/sql.py` opens a DuckDB shell over the outputs in `data/processed`,
+and `notebooks/01_explore.ipynb` has the queries I used while exploring.
+
+Or with Docker:
 
 ```bash
 docker build -t ukpn-flex . && docker run -p 8501:8501 ukpn-flex
 ```
 
-If the portal requires a login for this dataset, set `UKPN_API_KEY` in your
-environment. Nothing is committed.
+Some UKPN datasets need a portal login. If you get a 401 or 403, set `UKPN_API_KEY`.
+
 
 ## Notes
 
-UKPN publish an official Python client (`ukpyn`). This repo hand-rolls a small client
-instead, so that the offset ceiling on `/records`, the `/exports` route for full pulls,
-retry behaviour and auth are visible and testable rather than hidden behind a
-dependency. For production use, `ukpyn` is the sensible choice.
+UKPN have an official Python client (`ukpyn`). I wrote a small one instead because I
+wanted to understand how the API behaves: `/records` stops at 10,000 rows, so the full
+history has to come through `/exports`. If you just want the data, `ukpyn` is easier.
 
 Data © UK Power Networks, published under their open data terms.
