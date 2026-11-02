@@ -89,7 +89,7 @@ dispatches, April 2023 to August 2026) says:
 ## Running it
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"
 
 python scripts/discover_schema.py   # live field list and sample values
 python -m ukpn.pipeline             # pull, tidy, validate, analyse, charts
@@ -103,7 +103,8 @@ and `notebooks/01_explore.ipynb` has the queries I used while exploring.
 Or with Docker:
 
 ```bash
-docker build -t ukpn-flex . && docker run -p 8501:8501 ukpn-flex
+docker build -t ukpn-flex .
+docker run -p 8501:8501 ukpn-flex
 ```
 
 Some UKPN datasets need a portal login. If you get a 401 or 403, set `UKPN_API_KEY`.
