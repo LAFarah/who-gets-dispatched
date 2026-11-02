@@ -1,11 +1,12 @@
-"""Streamlit view. The Providers and Exceptions tabs are the ones to show."""
+"""Streamlit app for exploring the processed dispatch data."""
 
 from __future__ import annotations
 
-import pandas as pd
-import streamlit as st
 import sys
 from pathlib import Path
+
+import pandas as pd
+import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
@@ -16,9 +17,8 @@ st.set_page_config(page_title="Who gets dispatched?", layout="wide")
 
 @st.cache_data(show_spinner="Loading dispatches...")
 def load() -> pd.DataFrame:
-    # Read the pipeline output rather than the raw CSV. The raw extract is 12.7MB
-    # and gitignored, so it isn't present in a deployed environment — and the
-    # transform has already been applied and tested by the time this file exists.
+    # The raw CSV is gitignored so it won't be there when deployed. Use the
+    # tidied parquet from the pipeline instead.
     return pd.read_parquet("data/processed/tidy.parquet")
 
 
@@ -29,16 +29,15 @@ def checked(df: pd.DataFrame) -> pd.DataFrame:
 
 st.title("Who gets dispatched?")
 st.caption(
-        "UKPN's published QC criteria reproduced where the public feed allows, plus "
-        "internal consistency checks. **These checks are still being calibrated — "
-        "several are known to over-flag, and a flag here is a question about a field "
-        "definition, not a proven error.**"
+    "UK Power Networks flexibility dispatches, April 2023 onwards. Volumes and values "
+    "are requested, not delivered. The data quality checks are still a work in "
+    "progress and some of them over-flag."
 )
 
 try:
     df = load()
 except FileNotFoundError as e:
-    st.error(f"{e}\n\nRun `python -m ukpn.extract` first.")
+    st.error(f"{e}\n\nRun `python -m ukpn.pipeline` first.")
     st.stop()
 
 val = checked(df)
@@ -83,18 +82,15 @@ with tabs[1]:
 with tabs[2]:
     st.dataframe(analyse.price_by_group(d), use_container_width=True, hide_index=True)
     st.caption(
-        "Volume-weighted: EV charger dispatches are numerous and small, so a simple "
-        "mean would be dominated by them."
+        "Prices are volume-weighted. EV charger dispatches are frequent and small, "
+        "so a simple average would mostly reflect them."
     )
 
 with tabs[3]:
     st.dataframe(analyse.zone_concentration(d), use_container_width=True, hide_index=True)
 
 with tabs[4]:
-    st.caption(
-        "Bi-directional flexibility (demand turn-up, generation turn-down) went live "
-        "in April 2026."
-    )
+    st.caption("Dispatches per month by dispatch type.")
     dirs = analyse.direction_over_time(d)
     st.bar_chart(dirs.pivot(index="period", columns="dispatch_type", values="dispatches"))
     st.dataframe(dirs, use_container_width=True, hide_index=True)
@@ -103,11 +99,11 @@ with tabs[5]:
     st.dataframe(analyse.product_mix(d), use_container_width=True, hide_index=True)
 
 with tabs[6]:
-    st.subheader("Rows worth asking about")
+    st.subheader("Flagged rows")
     st.caption(
-        "UKPN's published QC criteria reproduced where the public feed allows, plus "
-        "internal consistency checks. A flag is a question about a field definition, "
-        "not a proven error."
+        "UKPN's published QC checks where the public data allows, plus some "
+        "consistency checks of my own. Flagged rows need a closer look; they aren't "
+        "necessarily wrong."
     )
     summary = validate.summarise(val.loc[mask])
     st.bar_chart(summary.set_index("check")["rows_flagged"])

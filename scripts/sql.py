@@ -1,22 +1,12 @@
-"""Query the pipeline outputs with SQL.
+"""SQL shell over the pipeline outputs, using DuckDB.
 
-DuckDB reads Parquet files directly -- no import, no server, no schema definition.
-Every file in data/processed is registered as a view named after the file, so
-`tidy.parquet` becomes the table `tidy`.
-
-Interactive:
+Each parquet file in data/processed becomes a view with the same name
+(tidy.parquet -> tidy).
 
     python scripts/sql.py
-
-One-shot:
-
     python scripts/sql.py "SELECT company, count(*) FROM tidy GROUP BY 1 ORDER BY 2 DESC"
 
-Meta-commands inside the shell:
-
-    \\d              list available tables
-    \\d tablename    show that table's columns and types
-    \\q              quit
+In the shell: \\d lists tables, \\d <table> describes one, \\q quits.
 """
 
 from __future__ import annotations
@@ -36,7 +26,7 @@ pd.set_option("display.float_format", lambda v: f"{v:,.4f}")
 
 
 def connect() -> duckdb.DuckDBPyConnection:
-    """In-memory DuckDB with every processed Parquet registered as a view."""
+    """In-memory DuckDB connection with a view per parquet file."""
     con = duckdb.connect()
     files = sorted(PROCESSED.glob("*.parquet"))
     if not files:
@@ -93,14 +83,13 @@ def repl() -> None:
                 continue
 
         buffer.append(line)
-        # Multi-line statements run when a semicolon closes them, or immediately
-        # if the line already looks like a complete single-line query.
+        # Run on a closing semicolon. One-line selects run straight away.
         joined = "\n".join(buffer)
-        if not joined.rstrip().endswith(";"):
-            if len(buffer) == 1 and stripped.lower().startswith(("select", "with", "describe", "summarize", "pivot")):
-                pass  # run single-line selects without needing a semicolon
-            else:
-                continue
+        one_liner = len(buffer) == 1 and stripped.lower().startswith(
+            ("select", "with", "describe", "summarize", "pivot")
+        )
+        if not joined.rstrip().endswith(";") and not one_liner:
+            continue
 
         query = joined.rstrip().rstrip(";")
         buffer = []

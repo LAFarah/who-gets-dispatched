@@ -1,4 +1,4 @@
-"""Who gets dispatched, how often, and what are they paid?"""
+"""Summary tables used by the pipeline, the app and the charts."""
 
 from __future__ import annotations
 
@@ -26,11 +26,7 @@ def share_over_time(df: pd.DataFrame, freq: str = "Q") -> pd.DataFrame:
 
 
 def company_league(df: pd.DataFrame) -> pd.DataFrame:
-    """Provider-level view: activity, footprint, and realised price.
-
-    Company names are published in the dataset, so this is the market as UKPN
-    reports it -- not an inference.
-    """
+    """One row per provider: dispatches, units, zones, volumes and prices."""
     d = df.copy()
     d["util_value"] = d["utilisation_mwh"].fillna(0) * d["utilisation_price"].fillna(0)
 
@@ -59,9 +55,8 @@ def company_league(df: pd.DataFrame) -> pd.DataFrame:
 def price_by_group(df: pd.DataFrame) -> pd.DataFrame:
     """Volume-weighted utilisation price by product and technology group.
 
-    Volume-weighted rather than averaged: EV charger dispatches are numerous and
-    tiny, so a simple mean would be dominated by them and understate what larger
-    assets are actually paid.
+    Weighted by MWh because there are lots of tiny EV charger dispatches, which
+    would drag a simple mean around.
     """
     d = df.dropna(subset=["utilisation_price", "utilisation_mwh"]).copy()
     d = d[d["utilisation_mwh"] > 0]
@@ -83,7 +78,7 @@ def price_by_group(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def zone_concentration(df: pd.DataFrame, top_n: int = 20) -> pd.DataFrame:
-    """Where the volume is, how competitive each zone is, and what it pays."""
+    """Top zones by volume, with provider count, domestic share and median price."""
     d = df.dropna(subset=["zone"]).copy()
     d["is_domestic"] = d["tech_group"].eq("domestic_dsr")
     d["domestic_mwh"] = d["utilisation_mwh"].where(d["is_domestic"], 0)
@@ -105,12 +100,7 @@ def zone_concentration(df: pd.DataFrame, top_n: int = 20) -> pd.DataFrame:
 
 
 def direction_over_time(df: pd.DataFrame, freq: str = "M") -> pd.DataFrame:
-    """Turn-down versus turn-up dispatches.
-
-    Bi-directional flexibility went live in April 2026, so demand_turn_up and
-    generation_turn_down should appear only from around that point. If they appear
-    earlier, that is worth asking UKPN about.
-    """
+    """Dispatches and MWh per period, by dispatch type."""
     d = df.dropna(subset=["start_time"]).copy()
     d["period"] = d["start_time"].dt.tz_convert("Europe/London").dt.tz_localize(None).dt.to_period(freq).dt.to_timestamp()
     return (

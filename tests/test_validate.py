@@ -12,11 +12,7 @@ def _checked(*rows: dict) -> pd.DataFrame:
 
 
 def test_documented_sample_row_is_clean():
-    """The row UKPN publish as an example must pass every check.
-
-    If this ever fails, either their data changed or a check is wrong -- and it is
-    far more likely to be the check.
-    """
+    """UKPN's own example row should pass every check."""
     out = _checked(raw_row())
     assert out["n_flags"].iloc[0] == 0, out[list(CHECKS)].iloc[0][lambda s: s].index.tolist()
 
@@ -85,7 +81,7 @@ def test_summary_reports_every_check():
 
 
 def test_exceptions_returns_only_flagged_rows():
-    # Different start time, so the composite key check does not also fire.
+    # different start time so it isn't also caught as a duplicate
     out = _checked(
         raw_row(),
         raw_row(
@@ -102,7 +98,7 @@ def test_exceptions_returns_only_flagged_rows():
 
 
 def test_same_unit_same_slot_different_technology_is_still_a_duplicate():
-    """The composite key deliberately excludes technology: one unit cannot be
-    dispatched twice for the same product in the same window."""
+    """Technology isn't part of the key. A unit can't be dispatched twice for the
+    same product and start time."""
     out = _checked(raw_row(), raw_row(technology="Battery"))
     assert out["duplicate_row_key"].all()

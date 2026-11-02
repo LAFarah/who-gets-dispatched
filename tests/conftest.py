@@ -1,9 +1,4 @@
-"""Fixtures built from the real UKPN schema (docs/schema.txt).
-
-Every test row starts from the sample row UKPN publish in their own field
-documentation, so if the tests ever fail against real data it means either the
-schema changed or a check encodes a wrong assumption.
-"""
+"""Test rows are based on the sample row in UKPN's field documentation."""
 
 from __future__ import annotations
 
@@ -19,7 +14,7 @@ RAW_COLUMNS = [
 
 
 def raw_row(**overrides) -> dict:
-    """The documented sample row, overridable field by field."""
+    """UKPN's sample row, with any fields overridden."""
     row = {
         "company_name": "Ohme",
         "fu_id": "OHME-CENT-SAOU-8573",

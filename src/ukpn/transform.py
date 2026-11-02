@@ -1,14 +1,11 @@
-"""Normalise the raw dispatch export into a tidy analysis frame.
+"""Turn the raw dispatch export into a tidy dataframe for analysis.
 
-Column names verified against the live UKPN schema (see docs/schema.txt).
+Column names come from the live schema (docs/schema.txt).
 
-Two things about this dataset drive most of the design:
-
-* There is **no dispatch identifier**. Rows are identified by the composite of
-  company, flexible unit, start time and product.
-* Availability and utilisation are **separate services with separate prices**.
-  A dispatch can carry one, the other, or both. Collapsing them into a single
-  "price" throws away the distinction UKPN are actually paying on.
+Two things to know about this data:
+- there's no dispatch ID, so a row is identified by company + unit + start time + product
+- availability and utilisation are priced separately and a dispatch can have
+  either or both, so they're kept as separate columns
 """
 
 from __future__ import annotations
@@ -21,7 +18,7 @@ log = logging.getLogger(__name__)
 
 LONDON = "Europe/London"
 
-# Verified field names -> canonical names used downstream.
+# UKPN field name -> name used in the rest of the code
 COLUMN_MAP: dict[str, str] = {
     "company_name": "company",
     "fu_id": "unit_id",
@@ -43,13 +40,12 @@ COLUMN_MAP: dict[str, str] = {
     "utilisation_price": "utilisation_price",
 }
 
-# The composite that stands in for a missing primary key.
+# No dispatch ID in the data, so use these together as the key
 KEY_COLUMNS = ["company", "unit_id", "start_time", "product"]
 
-# UKPN report technology using the Energy Source categories from Licence
-# Condition 31E. Grouping them is an editorial choice, so it is stated explicitly
-# rather than inferred by keyword. Anything unlisted becomes "unclassified" and is
-# reported as such -- never silently bucketed.
+# UKPN's technology labels (mostly the Licence Condition 31E energy source
+# categories) mapped to my own groups. Anything not listed ends up as
+# "unclassified" so new labels show up in the logs.
 TECHNOLOGY_GROUPS: dict[str, str] = {
     # domestic / behind-the-meter demand
     "EV Charger DSR": "domestic_dsr",
@@ -74,17 +70,17 @@ TECHNOLOGY_GROUPS: dict[str, str] = {
     "Other": "other",
 }
 
-# Two naming conventions appear in the record. Which one a row uses is itself a
-# signal about when it was published -- see the vocabulary analysis in the README.
+# The technology field mixes two naming styles (e.g. "Battery" vs "Stored Energy
+# (...)"). Tagging which one a row uses so I can check whether it changes over
+# time or by provider (see the notebook).
 LC31E_VOCABULARY = {
     "Stored Energy (all stored energy irrespective of the original energy source)",
     "Demand", "Fossil - Gas", "Biofuel - Landfill gas", "Wind", "Solar",
     "Ground Source Heat Pump",
 }
 
-# Aggregators whose fleets are households rather than sites. Used for the
-# "who dispatches domestic flexibility" cut. Verify against company_name values
-# in the full extract before relying on it.
+# Providers whose portfolios are mainly households. TODO: check this list
+# against all company names in the full extract.
 DOMESTIC_AGGREGATORS = {
     "Octopus", "Axle Energy Limited", "OVO Energy", "Ohme",
     "Ev.energy", "Electric Miles Ltd", "Fuse Energy",
@@ -92,7 +88,7 @@ DOMESTIC_AGGREGATORS = {
 
 
 def resolve_columns(df: pd.DataFrame) -> dict[str, str]:
-    """Map source columns onto canonical names, failing loudly on a schema change."""
+    """Match the raw columns to COLUMN_MAP. Raises if any are missing."""
     lookup = {c.lower().strip().lstrip("\ufeff"): c for c in df.columns}
     resolved: dict[str, str] = {}
     missing: list[str] = []
@@ -113,17 +109,17 @@ def resolve_columns(df: pd.DataFrame) -> dict[str, str]:
 
 
 def classify_technology(value: object) -> str:
-    """Explicit lookup. An unrecognised category stays unclassified by design."""
+    """Look up the technology group, or "unclassified" if it isn't mapped."""
     if not isinstance(value, str):
         return "unclassified"
     return TECHNOLOGY_GROUPS.get(value.strip(), "unclassified")
 
 
 def settlement_period(ts: pd.Series) -> pd.Series:
-    """Half-hourly settlement period from a tz-aware timestamp.
+    """Settlement period (1-based, half-hourly) from a tz-aware timestamp.
 
-    Computed from local midnight rather than a fixed 48-per-day assumption, so
-    31 March yields 46 periods and 27 October yields 50.
+    Counted from local midnight so clock-change days come out with 46 or 50
+    periods.
     """
     local = ts.dt.tz_convert(LONDON)
     elapsed = (local - local.dt.normalize()).dt.total_seconds()
@@ -136,8 +132,8 @@ def tidy(df: pd.DataFrame) -> pd.DataFrame:
     for canonical, source in cols.items():
         out[canonical] = df[source]
 
-    # start_time_utc / end_time_utc are published as text, not datetime -- parse both
-    # the UTC and local variants so they can be checked against each other.
+    # Times come through as text. Parse the local ones too so validate.py can
+    # compare them with UTC.
     for col in ("start_time", "end_time", "start_time_local", "end_time_local"):
         out[col] = pd.to_datetime(out[col], errors="coerce", utc=True)
 
@@ -154,9 +150,8 @@ def tidy(df: pd.DataFrame) -> pd.DataFrame:
     out["settlement_period"] = settlement_period(out["start_time"])
     out["month"] = out["start_time"].dt.tz_convert(LONDON).dt.tz_localize(None).values.astype("datetime64[M]")
 
-    # Requested value, split by service. UKPN state that requested volumes may not
-    # match delivered volumes -- performance against baseline decides what is paid,
-    # and outturn is published separately in the annual Flexibility Report.
+    # Value of what was requested. Delivered volumes (and what was actually paid)
+    # are in UKPN's annual Flexibility Report, not this dataset.
     out["availability_value_gbp"] = out["availability_mwh"] * out["availability_price"]
     out["utilisation_value_gbp"] = out["utilisation_mwh"] * out["utilisation_price"]
     out["total_value_gbp"] = (
@@ -170,8 +165,7 @@ def tidy(df: pd.DataFrame) -> pd.DataFrame:
     )
     out["is_domestic_aggregator"] = out["company"].isin(DOMESTIC_AGGREGATORS)
 
-    # Bi-directional flexibility (demand_turn_up / generation_turn_down) went live
-    # in April 2026, so this flag partitions old behaviour from new.
+    # Direction relative to load on the network: reduce = less net demand
     out["direction"] = out["dispatch_type"].map(
         {
             "demand_turn_down": "reduce",

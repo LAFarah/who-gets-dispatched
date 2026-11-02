@@ -1,15 +1,11 @@
-"""Minimal client for the UK Power Networks Opendatasoft Explore API (v2.1).
+"""Small client for the UKPN Opendatasoft Explore API (v2.1).
 
-UKPN publish an official client (`ukpyn` on PyPI). This is deliberately hand-rolled
-so the pagination limits, export endpoint and auth behaviour are visible and testable
-rather than hidden behind a dependency.
+UKPN have an official client (ukpyn on PyPI). I wrote this one to understand the
+paging limits and the export endpoint.
 
-Two ways to read a dataset:
-
-  * ``fetch_records``  -- paged /records endpoint. Convenient, but Opendatasoft caps
-    offset paging at 10,000 rows, so it is only safe for exploration and filtered pulls.
-  * ``export_dataset`` -- /exports/csv endpoint. No row cap. This is the correct way
-    to pull the full dispatch history.
+fetch_records: paged /records endpoint. Opendatasoft stops offset paging at
+    10,000 rows, so this is only good for samples and filtered queries.
+export_dataset: /exports/csv endpoint, no row limit. Used for the full history.
 """
 
 from __future__ import annotations
@@ -39,8 +35,7 @@ class UKPNClient:
         timeout: int = 30,
         max_retries: int = 4,
     ) -> None:
-        # The portal requires a login for some datasets. If you have a key, set
-        # UKPN_API_KEY in the environment rather than committing it.
+        # Some datasets need a portal login, key comes from the environment
         self.api_key = api_key or os.environ.get("UKPN_API_KEY")
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -48,8 +43,6 @@ class UKPNClient:
         self.session = requests.Session()
         if self.api_key:
             self.session.headers["Authorization"] = f"Apikey {self.api_key}"
-
-    # ----- low level -------------------------------------------------------
 
     def _get(self, path: str, params: dict[str, Any] | None = None) -> requests.Response:
         url = f"{self.base_url}{path}"
@@ -79,10 +72,8 @@ class UKPNClient:
 
         raise RuntimeError(f"Gave up on {url} after {self.max_retries} attempts")
 
-    # ----- public ----------------------------------------------------------
-
     def dataset_info(self, dataset: str = DATASET) -> dict[str, Any]:
-        """Metadata including the field list. Run this before writing any transform."""
+        """Dataset metadata, including the field list."""
         return self._get(f"/catalog/datasets/{dataset}").json()
 
     def fields(self, dataset: str = DATASET) -> list[dict[str, str]]:
@@ -105,7 +96,7 @@ class UKPNClient:
         order_by: str | None = None,
         limit: int | None = None,
     ) -> Iterator[dict[str, Any]]:
-        """Page the /records endpoint. Stops at MAX_OFFSET -- see module docstring."""
+        """Page through /records. Stops at MAX_OFFSET."""
         offset = 0
         yielded = 0
         while True:
@@ -138,6 +129,6 @@ class UKPNClient:
             offset += PAGE_SIZE
 
     def export_dataset(self, dataset: str = DATASET, fmt: str = "csv") -> bytes:
-        """Full dataset export -- no row cap. Use this for the real pull."""
+        """Download the whole dataset in one go."""
         resp = self._get(f"/catalog/datasets/{dataset}/exports/{fmt}")
         return resp.content

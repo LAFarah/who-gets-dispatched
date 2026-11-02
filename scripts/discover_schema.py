@@ -1,8 +1,6 @@
-"""Step one. Run this before anything else.
+"""Print the dataset's fields, a sample row and the common values in each text column.
 
-Prints the real field names, types and descriptions, plus the distinct values of the
-low-cardinality columns. Every mapping in src/ukpn/transform.py should be justified by
-this output -- do not guess column names.
+I used this to build COLUMN_MAP and TECHNOLOGY_GROUPS in transform.py.
 
     python scripts/discover_schema.py > docs/schema.txt
 """
@@ -56,7 +54,7 @@ def main() -> int:
             for value, n in counter.most_common():
                 print(f"    {n:>6}  {value}")
         elif counter:
-            print(f"\n{col}  ({len(counter)} distinct -- high cardinality, top 5)")
+            print(f"\n{col}  ({len(counter)} distinct, top 5)")
             for value, n in counter.most_common(5):
                 print(f"    {n:>6}  {value}")
 

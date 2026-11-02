@@ -37,7 +37,7 @@ class TestClassifyTechnology:
     def test_every_documented_category_maps(self, value, expected):
         assert classify_technology(value) == expected
 
-    def test_unknown_is_not_silently_bucketed(self):
+    def test_unknown_technology_is_unclassified(self):
         assert classify_technology("Tidal Lagoon") == "unclassified"
         assert classify_technology(None) == "unclassified"
 
@@ -48,7 +48,7 @@ class TestResolveColumns:
         assert resolved["company"] == "company_name"
         assert resolved["utilisation_mwh"] == "utilisation_mwh_req"
 
-    def test_schema_change_fails_loudly(self, raw_frame):
+    def test_missing_column_raises(self, raw_frame):
         renamed = raw_frame.rename(columns={"utilisation_mwh_req": "util_mwh"})
         with pytest.raises(KeyError, match="utilisation_mwh_req"):
             resolve_columns(renamed)

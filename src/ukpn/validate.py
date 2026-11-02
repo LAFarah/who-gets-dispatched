@@ -1,26 +1,24 @@
-"""Reproduce UKPN's published quality-control criteria, plus internal consistency checks.
+"""Data quality checks.
 
-UKPN state that dispatches pass a QC algorithm checking that they are timed
-consistently with the contracted service window, matched to the correct zone,
-unique, issued at the contracted price and volume, and matched to an active contract.
+UKPN's QC checks that each dispatch is within the contracted service window, in
+the right zone, unique, at the contracted price and volume, and matched to an
+active contract. The contract data isn't public, so this does what it can from
+the dataset itself plus some consistency checks.
 
-Three of those need contract data the public feed does not carry. What follows are
-the internally-verifiable analogues, plus checks the published schema makes possible.
-A flagged row is a question about a field definition, not a proven error.
+Each check adds a boolean column; n_flags counts how many fired per row.
 """
 
 from __future__ import annotations
 
 import logging
 
-import numpy as np
 import pandas as pd
 
 from ukpn.transform import KEY_COLUMNS
 
 log = logging.getLogger(__name__)
 
-# Tolerance for float comparisons on MWh figures (they are published to 2dp).
+# MWh values are published to 2dp
 TOL = 0.011
 
 CHECKS: dict[str, str] = {
@@ -40,15 +38,15 @@ CHECKS: dict[str, str] = {
 }
 
 
-def _close(a: pd.Series, b: pd.Series, tol: float = TOL) -> pd.Series:
-    """True where the two differ by more than tol, ignoring rows where either is null."""
+def _differs(a: pd.Series, b: pd.Series, tol: float = TOL) -> pd.Series:
+    """True where a and b differ by more than tol. Nulls are never flagged."""
     both = a.notna() & b.notna()
     return both & ((a - b).abs() > tol)
 
 
 def _price_outliers(df: pd.DataFrame, n_iqr: float = 3.0) -> pd.Series:
-    """Per-product IQR band. Products are priced on different bases, so a single
-    global band would flag the wrong rows."""
+    """Flag utilisation prices outside 3 x IQR, calculated per product since
+    prices vary a lot between products."""
     flag = pd.Series(False, index=df.index)
     for _, grp in df.groupby("product", dropna=False):
         prices = grp["utilisation_price"].dropna()
@@ -78,13 +76,13 @@ def run_checks(df: pd.DataFrame) -> pd.DataFrame:
 
     out["duplicate_row_key"] = out.duplicated(subset=KEY_COLUMNS, keep=False)
 
-    out["utilisation_mwh_mismatch"] = _close(
+    out["utilisation_mwh_mismatch"] = _differs(
         out["utilisation_mwh"], out["utilisation_mw"] * out["hours_requested"]
     )
-    out["availability_mwh_mismatch"] = _close(
+    out["availability_mwh_mismatch"] = _differs(
         out["availability_mwh"], out["availability_mw"] * out["hours_requested"]
     )
-    out["hours_mismatch"] = _close(out["hours_requested"], out["duration_hours"], tol=0.02)
+    out["hours_mismatch"] = _differs(out["hours_requested"], out["duration_hours"], tol=0.02)
 
     out["utc_local_mismatch"] = (
         out["start_time"].notna() & out["start_time_local"].notna()

@@ -1,4 +1,4 @@
-"""Publication figures. The exceptions chart is the one that goes in the README."""
+"""Charts saved to figures/ for the README."""
 
 from __future__ import annotations
 
@@ -32,11 +32,7 @@ def _style(ax) -> None:
 
 
 def exceptions_chart(summary: pd.DataFrame, total_rows: int, out: Path | None = None) -> Path:
-    """Horizontal bars: rows flagged per check, against the size of the dataset.
-
-    Designed so the honest headline is unavoidable -- the annotation states how many
-    rows out of how many, so a small number reads as a small number.
-    """
+    """Rows flagged per check, labelled with counts and % of all dispatches."""
     out = out or FIG_DIR / "exceptions_by_check.png"
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -54,9 +50,8 @@ def exceptions_chart(summary: pd.DataFrame, total_rows: int, out: Path | None = 
             ax.text(bar.get_width() * 1.02, bar.get_y() + bar.get_height() / 2,
                     f"{n:,}  ({pct:.2f}%)", va="center", ha="left", fontsize=9, color=INK)
 
-    flagged = int(summary["rows_flagged"].gt(0).any() and summary["rows_flagged"].sum())
     ax.set_title(
-        "Rows flagged by UKPN's own published QC criteria, reproduced independently",
+        "Rows flagged by each data quality check",
         fontsize=12, color=INK, pad=16, loc="left",
     )
     ax.set_xlabel(f"Dispatches flagged (of {total_rows:,} total, 1 Apr 2023 onwards)",
@@ -71,7 +66,7 @@ def exceptions_chart(summary: pd.DataFrame, total_rows: int, out: Path | None = 
 
 
 def share_chart(share: pd.DataFrame, out: Path | None = None) -> Path:
-    """The headline finding: distributed share of requested MWh over time."""
+    """Share of requested MWh by technology group over time."""
     out = out or FIG_DIR / "distributed_share.png"
     out.parent.mkdir(parents=True, exist_ok=True)
 

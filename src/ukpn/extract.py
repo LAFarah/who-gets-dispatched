@@ -1,4 +1,4 @@
-"""Pull the dispatch history to disk. Raw stays raw -- no transformation here."""
+"""Download the dispatch history to data/raw as-is."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ RAW_DIR = Path("data/raw")
 
 
 def download(dataset: str = DATASET, raw_dir: Path = RAW_DIR) -> Path:
-    """Export the full dataset to a date-stamped CSV. Re-runnable and idempotent."""
+    """Save the full export as a dated CSV. Skips if today's file already exists."""
     raw_dir.mkdir(parents=True, exist_ok=True)
     stamp = dt.date.today().isoformat()
     path = raw_dir / f"{dataset}_{stamp}.csv"

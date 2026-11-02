@@ -1,4 +1,4 @@
-"""End to end: extract -> tidy -> validate -> analyse -> figures.
+"""Runs everything: extract, tidy, validate, analyse, figures.
 
     python -m ukpn.pipeline
 """
@@ -27,7 +27,7 @@ def run(refresh: bool = True) -> dict[str, pd.DataFrame]:
     before = len(raw)
 
     tidy = transform.tidy(raw)
-    # Reconciliation assertion: the transform must not silently gain or lose rows.
+    # tidy() shouldn't add or drop rows
     assert len(tidy) == before, f"Row count changed in transform: {before} -> {len(tidy)}"
 
     validated = validate.run_checks(tidy)
