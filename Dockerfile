@@ -2,12 +2,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir requests pandas matplotlib streamlit
+RUN pip install --no-cache-dir requests pandas pyarrow matplotlib streamlit
 
 COPY src/ ./src/
 COPY app.py ./
-COPY scripts/ ./scripts/
+COPY data/processed/ ./data/processed/
 
 ENV PYTHONPATH=/app/src
 
